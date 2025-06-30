@@ -3,7 +3,7 @@
 #include <DHT.h>
 
 // ==================== IDENTIFICACIÓN DEL DISPOSITIVO ====================
-const char* HARDWARE_ID = "245_HWID_1751239236847";
+const char* HARDWARE_ID = "245_HWID_1751248577375";
 
 // ==================== CONFIGURACIÓN INICIAL ====================
 unsigned long measurementIntervalMs = 60000;       // 1 minuto
@@ -46,12 +46,14 @@ void setup() {
   Serial.begin(9600);
   while (!Serial);
 
+  // Limpiar buffer serial
   while(Serial.available() > 0){
     Serial.read();
   }
 
   delay(2000);
 
+  // Enviar mensaje de handshake
   for (int i = 0; i < 3; i++){
     StaticJsonDocument<200> helloDoc;
     helloDoc["type"] = "hello_arduino";
@@ -63,6 +65,7 @@ void setup() {
 
   hardwareIdEnviado = true;
 
+  // Configuración de pines
   pinMode(ledPin, OUTPUT);
   pinMode(waterLevelPin, INPUT);
   pinMode(trigPin, OUTPUT);
@@ -71,6 +74,7 @@ void setup() {
   pinMode(VALVE_PIN, OUTPUT);
   pinMode(ledInterno, OUTPUT);
 
+  // Estados iniciales
   digitalWrite(ledPin, LOW);
   digitalWrite(FAN_PIN, HIGH);
   digitalWrite(VALVE_PIN, HIGH);
@@ -86,6 +90,7 @@ void loop() {
   if (!modoPruebaActivo) {
     processSerialCommands();
 
+    // Enviar datos de sensores según el intervalo configurado
     if (currentMillis - lastSensorReadTime >= measurementIntervalMs) {
       sendSensorData();
       lastSensorReadTime = currentMillis;
@@ -290,13 +295,11 @@ void processSerialCommands() {
         }
       }
 
-
-      // --- MODO DE PRUEBA ---
-      /*
-      else if (strcmp(command, "test") == 0) {
-        modoPruebaActivo = true;
+      // --- SOLICITUD DE LECTURA MANUAL ---
+      else if (strcmp(command, "manual_read") == 0) {
+        // Enviar datos inmediatamente cuando se solicite
+        sendSensorData();
       }
-      */
     }
   }
 }
@@ -314,16 +317,40 @@ void sendSensorData() {
   long drainageDistance = leerDistanciaUltrasonico();
   bool isDraining = (drainageDistance <= 20);         
 
+  // Validar lecturas del DHT
+  if (isnan(temperature) || isnan(airHumidity)) {
+    // Si hay error en el DHT, enviar solo los otros sensores
+    StaticJsonDocument<300> dataDoc;
+    dataDoc["hardwareId"] = HARDWARE_ID;
+    dataDoc["soilHumidity"] = soilHumidity;
+    dataDoc["lightLevel"] = lightLevel;
+    dataDoc["waterLevel"] = waterLevel;
+    dataDoc["drainageDistance"] = drainageDistance;
+    dataDoc["draining"] = isDraining;
+    
+    serializeJson(dataDoc, Serial);
+    Serial.println();
+    return;
+  }
+
   // --- CONSTRUCCIÓN DEL JSON DE DATOS A ENVIAR ---
-  StaticJsonDocument<384> dataDoc;
+  // ✅ FORMATO CORREGIDO: Compatible con el schema de la API
+  StaticJsonDocument<400> dataDoc;
   dataDoc["hardwareId"] = HARDWARE_ID;
-  dataDoc["temperature"] = temperature;
-  dataDoc["airHumidity"] = airHumidity;
+  dataDoc["temperature"] = round(temperature * 10) / 10.0; // Redondear a 1 decimal
+  dataDoc["airHumidity"] = round(airHumidity * 10) / 10.0; // Redondear a 1 decimal
   dataDoc["soilHumidity"] = soilHumidity;
   dataDoc["lightLevel"] = lightLevel;
-  dataDoc["waterLevel"] = waterLevel;              
+  dataDoc["waterLevel"] = waterLevel; // Ya es 0 o 1
+  
+  // Campos adicionales (opcionales para monitoreo)
   dataDoc["drainageDistance"] = drainageDistance;
   dataDoc["draining"] = isDraining;
+  
+  // Estado actual de actuadores (para debug)
+  dataDoc["ledState"] = digitalRead(ledPin);
+  dataDoc["fanState"] = (digitalRead(FAN_PIN) == LOW) ? 1 : 0;
+  dataDoc["valveState"] = (digitalRead(VALVE_PIN) == LOW) ? 1 : 0;
 
   // --- ENVÍO DEL JSON POR SERIAL ---
   serializeJson(dataDoc, Serial);
@@ -351,7 +378,6 @@ void printSensorDataDebugPeriodically() {
   }
 }
 
-
 void actualizarLightLevel() {
   lightLevel = analogRead(A1);
 }
@@ -367,42 +393,23 @@ void controlarLuz() {
   }
 }
 
-
 void printSensorDataDebug(float temperature, float airHumidity, int soilHumidity, int lightLevel, int waterLevel) {
-  //Serial.println("----- Sensor Readings (DEBUG) -----");
-  //Serial.print("Temperature: ");
-  //Serial.print(temperature);
-  //Serial.println(" °C");
-
-  //Serial.print("Air Humidity: ");
-  //Serial.print(airHumidity);
-  //Serial.println(" %");
-
-  //Serial.print("Soil Humidity: ");
-  //Serial.print(soilHumidity);
-  //Serial.println(" %");
-
-  //Serial.print("Light Level: ");
-  //Serial.println(lightLevel);
-
-  //Serial.print("Water Level (digital): ");
-  //Serial.println(waterLevel == HIGH ? "LOW" : "HIGH");
-
+  // Debug comentado para evitar interferencia con datos JSON
+  /*
+  Serial.println("----- Sensor Readings (DEBUG) -----");
+  Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" °C");
+  Serial.print("Air Humidity: "); Serial.print(airHumidity); Serial.println(" %");
+  Serial.print("Soil Humidity: "); Serial.print(soilHumidity); Serial.println(" %");
+  Serial.print("Light Level: "); Serial.println(lightLevel);
+  Serial.print("Water Level (digital): "); Serial.println(waterLevel == HIGH ? "LOW" : "HIGH");
+  
   long drainageDistance = leerDistanciaUltrasonico();
   bool isDraining = (drainageDistance <= 20);
-
-  //Serial.print("Drainage Distance: ");
-  //Serial.print(drainageDistance);
-  //Serial.println(" cm");
-
-  //Serial.print("Draining: ");
-  //Serial.println(isDraining ? "YES" : "NO");
-
-  //Serial.print("Fan Relay: ");
-  //Serial.println(digitalRead(FAN_PIN) == LOW ? "ON" : "OFF");
-
-  //Serial.print("Valve Relay: ");
-  //Serial.println(digitalRead(VALVE_PIN) == LOW ? "ON" : "OFF");
+  Serial.print("Drainage Distance: "); Serial.print(drainageDistance); Serial.println(" cm");
+  Serial.print("Draining: "); Serial.println(isDraining ? "YES" : "NO");
+  Serial.print("Fan Relay: "); Serial.println(digitalRead(FAN_PIN) == LOW ? "ON" : "OFF");
+  Serial.print("Valve Relay: "); Serial.println(digitalRead(VALVE_PIN) == LOW ? "ON" : "OFF");
+  */
 }
 
 long leerDistanciaUltrasonico() {
@@ -433,7 +440,6 @@ void checkAutoIrrigation() {
   }
 }
 
-
 void checkAutoVentilation() {
   if (modoManualVentilador) return; 
 
@@ -441,7 +447,7 @@ void checkAutoVentilation() {
     float currentTemperature = dht.readTemperature();
 
     if (isnan(currentTemperature)) {
-      Serial.println("Failed to read temperature for ventilation control.");
+      // Si no se puede leer la temperatura, mantener estado actual
       return;
     }
 
@@ -450,11 +456,11 @@ void checkAutoVentilation() {
     } else if (currentTemperature < temperatureOffThreshold) {
       digitalWrite(FAN_PIN, HIGH); // Apagar
     }
+    // Entre temperatureOffThreshold y temperatureOnThreshold mantiene estado actual (histéresis)
   } else {
     digitalWrite(FAN_PIN, HIGH); 
   }
 }
-
 
 void modoDePruebaInteractivo() {
   Serial.println("=== MODO DE PRUEBA ACTIVADO ===");
@@ -493,8 +499,11 @@ void modoDePruebaInteractivo() {
           digitalWrite(VALVE_PIN, val ? LOW : HIGH);
           Serial.print("VALVE: ");
           Serial.println(val ? "ON" : "OFF");
+        } else if (input == "read") {
+          // Comando especial para obtener lectura inmediata
+          sendSensorData();
         } else {
-          Serial.println("Comando inválido. Usa: led 1, fan 0, valve 1, exit");
+          Serial.println("Comando inválido. Usa: led 1, fan 0, valve 1, read, exit");
         }
 
         input = "";
