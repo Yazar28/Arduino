@@ -3,7 +3,7 @@
 #include <DHT.h>
 
 // ==================== IDENTIFICACIÓN DEL DISPOSITIVO ====================
-const char* HARDWARE_ID = "245_HWID_1751248577375";
+const char* HARDWARE_ID = "245_HWID_1751262536567";
 
 // ==================== CONFIGURACIÓN INICIAL ====================
 unsigned long measurementIntervalMs = 60000;       // 1 minuto
@@ -11,7 +11,7 @@ unsigned long photoCaptureIntervalMs = 6 * 3600000UL; // 6 horas
 unsigned long lastSensorReadTime = 0;
 unsigned long lastPhotoTime = 0;
 unsigned long lastDebugPrintTime = 0;
-const unsigned long debugPrintIntervalMs = 5000;
+const unsigned long debugPrintIntervalMs = 1000;
 bool modoManualLuz = false; 
 bool modoManualVentilador = false;
 bool modoManualValvula = false;
@@ -64,6 +64,7 @@ void setup() {
   }
 
   hardwareIdEnviado = true;
+  sendSensorData();
 
   // Configuración de pines
   pinMode(ledPin, OUTPUT);
@@ -90,7 +91,6 @@ void loop() {
   if (!modoPruebaActivo) {
     processSerialCommands();
 
-    // Enviar datos de sensores según el intervalo configurado
     if (currentMillis - lastSensorReadTime >= measurementIntervalMs) {
       sendSensorData();
       lastSensorReadTime = currentMillis;
@@ -297,7 +297,6 @@ void processSerialCommands() {
 
       // --- SOLICITUD DE LECTURA MANUAL ---
       else if (strcmp(command, "manual_read") == 0) {
-        // Enviar datos inmediatamente cuando se solicite
         sendSensorData();
       }
     }
@@ -334,7 +333,6 @@ void sendSensorData() {
   }
 
   // --- CONSTRUCCIÓN DEL JSON DE DATOS A ENVIAR ---
-  // ✅ FORMATO CORREGIDO: Compatible con el schema de la API
   StaticJsonDocument<400> dataDoc;
   dataDoc["hardwareId"] = HARDWARE_ID;
   dataDoc["temperature"] = round(temperature * 10) / 10.0; // Redondear a 1 decimal
@@ -362,7 +360,6 @@ void printSensorDataDebugPeriodically() {
     float temperature = dht.readTemperature();     
     float airHumidity = dht.readHumidity();       
 
-    // Validación para evitar imprimir NaN si hay error
     if (isnan(temperature) || isnan(airHumidity)) {
       Serial.println("Failed to read from DHT sensor (DEBUG)!");
       return;
@@ -447,7 +444,6 @@ void checkAutoVentilation() {
     float currentTemperature = dht.readTemperature();
 
     if (isnan(currentTemperature)) {
-      // Si no se puede leer la temperatura, mantener estado actual
       return;
     }
 
@@ -456,7 +452,6 @@ void checkAutoVentilation() {
     } else if (currentTemperature < temperatureOffThreshold) {
       digitalWrite(FAN_PIN, HIGH); // Apagar
     }
-    // Entre temperatureOffThreshold y temperatureOnThreshold mantiene estado actual (histéresis)
   } else {
     digitalWrite(FAN_PIN, HIGH); 
   }
