@@ -3,7 +3,7 @@
 #include <DHT.h>
 
 // ==================== IDENTIFICACIÓN DEL DISPOSITIVO ====================
-const char* HARDWARE_ID = "245_HWID_1751010607747";
+const char* HARDWARE_ID = "245_HWID_1751239236847";
 
 // ==================== CONFIGURACIÓN INICIAL ====================
 unsigned long measurementIntervalMs = 60000;       // 1 minuto
@@ -93,7 +93,6 @@ void loop() {
 
     if (currentMillis - lastPhotoTime >= photoCaptureIntervalMs) {
       lastPhotoTime = currentMillis;
-      // Lógica de captura de foto iría aquí
     }
 
     if (currentMillis - lastDebugPrintTime >= debugPrintIntervalMs) {
@@ -151,43 +150,56 @@ void processSerialCommands() {
 
     const char* command = doc["command"];
     if (command) {
-      // ------------------ LED ------------------
+
+      // --- CONTROL LED ---
       if (strcmp(command, "set_led") == 0) {
         if (doc.containsKey("state") && doc["state"].is<int>()) {
           int state = doc["state"].as<int>();
           if (state == 0 || state == 1) {
-            modoManualLuz = true;  // SIEMPRE activar modo manual
+            bool manual = true;
+            if (doc.containsKey("manual") && doc["manual"].is<bool>()) {
+              manual = doc["manual"].as<bool>();
+            }
+            modoManualLuz = manual;
             digitalWrite(ledPin, state == 1 ? HIGH : LOW);
             sendAck("ack_led_set", "state", state, HARDWARE_ID);
           }
         }
       }
 
-      // ------------------ FAN ------------------
+      // --- CONTROL FAN ---
       else if (strcmp(command, "set_fan") == 0) {
         if (doc.containsKey("state") && doc["state"].is<int>()) {
           int state = doc["state"].as<int>();
           if (state == 0 || state == 1) {
-            modoManualVentilador = true;  // SIEMPRE activar modo manual
+            bool manual = true;
+            if (doc.containsKey("manual") && doc["manual"].is<bool>()) {
+              manual = doc["manual"].as<bool>();
+            }
+            modoManualVentilador = manual;
             digitalWrite(FAN_PIN, state == 1 ? LOW : HIGH);
             sendAck("ack_fan_set", "state", state, HARDWARE_ID);
           }
         }
       }
 
-      // ------------------ VALVE ------------------
+      // --- CONTROL VALVE ---
       else if (strcmp(command, "set_valve") == 0) {
         if (doc.containsKey("state") && doc["state"].is<int>()) {
           int state = doc["state"].as<int>();
           if (state == 0 || state == 1) {
-            modoManualValvula = true;  // SIEMPRE activar modo manual
+            bool manual = true;
+            if (doc.containsKey("manual") && doc["manual"].is<bool>()) {
+              manual = doc["manual"].as<bool>();
+            }
+            modoManualValvula = manual;
             digitalWrite(VALVE_PIN, state == 1 ? LOW : HIGH);
             sendAck("ack_valve_set", "state", state, HARDWARE_ID);
           }
         }
       }
 
-      // ------------------ INTERVALO ------------------
+      // --- INTERVALO MEDICIÓN ---
       else if (strcmp(command, "set_interval") == 0) {
         if (doc.containsKey("value_ms")) {
           measurementIntervalMs = doc["value_ms"].as<unsigned long>();
@@ -195,7 +207,7 @@ void processSerialCommands() {
         }
       }
 
-      // ------------------ INTERVALO DE FOTOS ------------------
+      // --- INTERVALO FOTOS ---
       else if (strcmp(command, "set_photo_interval") == 0) {
         if (doc.containsKey("value_hours")) {
           int hours = doc["value_hours"].as<int>();
@@ -204,7 +216,7 @@ void processSerialCommands() {
         }
       }
 
-      // ------------------ UNIDAD DE TEMPERATURA ------------------
+      // --- UNIDAD DE TEMPERATURA ---
       else if (strcmp(command, "set_temp_unit") == 0) {
         if (doc.containsKey("unit")) {
           temperatureUnit = doc["unit"].as<String>();
@@ -212,7 +224,7 @@ void processSerialCommands() {
         }
       }
 
-      // ------------------ RIEGO AUTOMÁTICO ------------------
+      // --- AUTO IRRIGACIÓN ---
       else if (strcmp(command, "set_auto_irrigation") == 0) {
         if (doc.containsKey("enabled") && doc.containsKey("threshold")) {
           autoIrrigationEnabled = doc["enabled"].as<bool>();
@@ -228,7 +240,7 @@ void processSerialCommands() {
         }
       }
 
-      // ------------------ VENTILACIÓN AUTOMÁTICA ------------------
+      // --- AUTO VENTILACIÓN ---
       else if (strcmp(command, "set_auto_ventilation") == 0) {
         if (doc.containsKey("enabled") && doc.containsKey("temp_on") && doc.containsKey("temp_off")) {
           autoVentilationEnabled = doc["enabled"].as<bool>();
@@ -246,10 +258,45 @@ void processSerialCommands() {
         }
       }
 
-      // ------------------ MODO PRUEBA ------------------
+      // --- CAMBIAR A MODO AUTOMÁTICO ---
+      else if (strcmp(command, "set_auto_mode") == 0) {
+        if (doc.containsKey("device")) {
+          String device = doc["device"].as<String>();
+
+          if (device == "led") {
+            modoManualLuz = false;
+            controlarLuz();
+          } else if (device == "fan") {
+            modoManualVentilador = false;
+            checkAutoVentilation();
+          } else if (device == "valve") {
+            modoManualValvula = false;
+            checkAutoIrrigation();
+          } else if (device == "all") {
+            modoManualLuz = false;
+            modoManualVentilador = false;
+            modoManualValvula = false;
+            controlarLuz();
+            checkAutoVentilation();
+            checkAutoIrrigation();
+          }
+
+          StaticJsonDocument<200> ack;
+          ack["type"] = "ack_auto_mode";
+          ack["device"] = device;
+          ack["hardwareId"] = HARDWARE_ID;
+          serializeJson(ack, Serial);
+          Serial.println();
+        }
+      }
+
+
+      // --- MODO DE PRUEBA ---
+      /*
       else if (strcmp(command, "test") == 0) {
         modoPruebaActivo = true;
       }
+      */
     }
   }
 }
@@ -404,7 +451,7 @@ void checkAutoVentilation() {
       digitalWrite(FAN_PIN, HIGH); // Apagar
     }
   } else {
-    digitalWrite(FAN_PIN, LOW); 
+    digitalWrite(FAN_PIN, HIGH); 
   }
 }
 
