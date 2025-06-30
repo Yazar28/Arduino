@@ -3,11 +3,11 @@
 #include <DHT.h>
 
 // ==================== IDENTIFICACIÓN DEL DISPOSITIVO ====================
-const char* HARDWARE_ID = "245_HWID_1751262536567";
+const char* HARDWARE_ID = "245_HWID_1751280657856";
 
 // ==================== CONFIGURACIÓN INICIAL ====================
-unsigned long measurementIntervalMs = 60000;       // 1 minuto
-unsigned long photoCaptureIntervalMs = 6 * 3600000UL; // 6 horas
+unsigned long measurementIntervalMs = 60000;       
+unsigned long photoCaptureIntervalMs = 6 * 3600000UL; 
 unsigned long lastSensorReadTime = 0;
 unsigned long lastPhotoTime = 0;
 unsigned long lastDebugPrintTime = 0;
@@ -101,7 +101,6 @@ void loop() {
     }
 
     if (currentMillis - lastDebugPrintTime >= debugPrintIntervalMs) {
-      //printSensorDataDebugPeriodically();
       lastDebugPrintTime = currentMillis;
     }
 
@@ -316,9 +315,7 @@ void sendSensorData() {
   long drainageDistance = leerDistanciaUltrasonico();
   bool isDraining = (drainageDistance <= 20);         
 
-  // Validar lecturas del DHT
   if (isnan(temperature) || isnan(airHumidity)) {
-    // Si hay error en el DHT, enviar solo los otros sensores
     StaticJsonDocument<300> dataDoc;
     dataDoc["hardwareId"] = HARDWARE_ID;
     dataDoc["soilHumidity"] = soilHumidity;
@@ -335,11 +332,11 @@ void sendSensorData() {
   // --- CONSTRUCCIÓN DEL JSON DE DATOS A ENVIAR ---
   StaticJsonDocument<400> dataDoc;
   dataDoc["hardwareId"] = HARDWARE_ID;
-  dataDoc["temperature"] = round(temperature * 10) / 10.0; // Redondear a 1 decimal
-  dataDoc["airHumidity"] = round(airHumidity * 10) / 10.0; // Redondear a 1 decimal
+  dataDoc["temperature"] = round(temperature * 10) / 10.0;
+  dataDoc["airHumidity"] = round(airHumidity * 10) / 10.0; 
   dataDoc["soilHumidity"] = soilHumidity;
   dataDoc["lightLevel"] = lightLevel;
-  dataDoc["waterLevel"] = waterLevel; // Ya es 0 o 1
+  dataDoc["waterLevel"] = waterLevel;
   
   // Campos adicionales (opcionales para monitoreo)
   dataDoc["drainageDistance"] = drainageDistance;
@@ -355,26 +352,6 @@ void sendSensorData() {
   Serial.println(); 
 }
 
-void printSensorDataDebugPeriodically() {
-  if (millis() - lastDebugPrintTime >= debugPrintIntervalMs) {
-    float temperature = dht.readTemperature();     
-    float airHumidity = dht.readHumidity();       
-
-    if (isnan(temperature) || isnan(airHumidity)) {
-      Serial.println("Failed to read from DHT sensor (DEBUG)!");
-      return;
-    }
-
-    int soilHumidity = map(analogRead(A0), 0, 1023, 100, 0);
-    int lightLevel = analogRead(A1);
-    int waterLevel = digitalRead(waterLevelPin);
-
-    printSensorDataDebug(temperature, airHumidity, soilHumidity, lightLevel, waterLevel);
-
-    lastDebugPrintTime = millis();
-  }
-}
-
 void actualizarLightLevel() {
   lightLevel = analogRead(A1);
 }
@@ -388,25 +365,6 @@ void controlarLuz() {
   } else {
     digitalWrite(ledPin, LOW);  
   }
-}
-
-void printSensorDataDebug(float temperature, float airHumidity, int soilHumidity, int lightLevel, int waterLevel) {
-  // Debug comentado para evitar interferencia con datos JSON
-  /*
-  Serial.println("----- Sensor Readings (DEBUG) -----");
-  Serial.print("Temperature: "); Serial.print(temperature); Serial.println(" °C");
-  Serial.print("Air Humidity: "); Serial.print(airHumidity); Serial.println(" %");
-  Serial.print("Soil Humidity: "); Serial.print(soilHumidity); Serial.println(" %");
-  Serial.print("Light Level: "); Serial.println(lightLevel);
-  Serial.print("Water Level (digital): "); Serial.println(waterLevel == HIGH ? "LOW" : "HIGH");
-  
-  long drainageDistance = leerDistanciaUltrasonico();
-  bool isDraining = (drainageDistance <= 20);
-  Serial.print("Drainage Distance: "); Serial.print(drainageDistance); Serial.println(" cm");
-  Serial.print("Draining: "); Serial.println(isDraining ? "YES" : "NO");
-  Serial.print("Fan Relay: "); Serial.println(digitalRead(FAN_PIN) == LOW ? "ON" : "OFF");
-  Serial.print("Valve Relay: "); Serial.println(digitalRead(VALVE_PIN) == LOW ? "ON" : "OFF");
-  */
 }
 
 long leerDistanciaUltrasonico() {
